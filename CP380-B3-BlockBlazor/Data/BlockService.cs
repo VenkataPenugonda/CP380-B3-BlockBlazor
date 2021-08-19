@@ -6,43 +6,57 @@ using System.Text.Json;
 using System.Net.Http;
 using Microsoft.Extensions.Configuration;
 using CP380_B1_BlockList.Models;
-using Microsoft.AspNetCore.Mvc;
+using System.Text;
+using Newtonsoft.Json;
 
 namespace CP380_B3_BlockBlazor.Data
 {
     public class BlockService
     {
-        // TODO: Add variables for the dependency-injected resources
-        //       - httpClient
-        //       - configuration
-        //
-        static HttpClient clientFactory;
-        public IConfiguration configuration;
-
-        //
-        // TODO: Add a constructor with IConfiguration and IHttpClientFactory arguments
-        //
+        private readonly HttpClient _httpClient = new HttpClient();
         public BlockService() { }
-        public BlockService(IConfiguration c, IHttpClientFactory http)
-        {
-            clientFactory = http.CreateClient();
-            configuration = c.GetSection("BlockService");
-        }
-
-        //
-        // TODO: Add an async method that returns an IEnumerable<Block> (list of Blocks)
-        //       from the web service
-        //
         public async Task<IEnumerable<Block>> ListBlocks()
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, configuration["url"]);            
-            var response = await clientFactory.SendAsync(request);
-            if (response.IsSuccessStatusCode)
+            IEnumerable<Block> blockList = null;
+
+            var res = await _httpClient.GetAsync("http://localhost:46688/blocks");
+            if (res.IsSuccessStatusCode)
             {
-                var responseStream = await response.Content.ReadAsStreamAsync();
-                return await JsonSerializer.DeserializeAsync<IEnumerable<Block>>(responseStream);
+                var response = await res.Content.ReadAsStringAsync();
+                var block = JsonConvert.DeserializeObject(response).ToString();
+                blockList = JsonConvert.DeserializeObject<IEnumerable<Block>>(block);
             }
-            return Array.Empty<Block>();
+            return blockList;
+        }
+
+        public async Task<Block> SubmitNewBlockAsync(Block block)
+        {
+            var httpRequestMessage = new HttpRequestMessage()
+            {
+                Method = new HttpMethod("POST"),
+                RequestUri = new Uri("http://localhost:46688/blocks"),
+                Content = new StringContent(JsonConvert.SerializeObject(block), Encoding.UTF8, "application/json"),
+            };
+            var res = await _httpClient.SendAsync(httpRequestMessage);
+            if (res.IsSuccessStatusCode)
+            {
+                res = await _httpClient.GetAsync("http://localhost:46688/blocks");
+                if (res.IsSuccessStatusCode && res.Content != null)
+                {
+                    string responseStream = await res.Content.ReadAsStringAsync();
+                    var resultBlock = JsonConvert.DeserializeObject(responseStream).ToString();
+                    block = JsonConvert.DeserializeObject<Block>(resultBlock);
+                    return block;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                return null;
+            }
         }
     }
 }
